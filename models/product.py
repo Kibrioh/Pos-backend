@@ -23,6 +23,7 @@ class Product(db.Model):
     category = db.relationship("Category", back_populates="products")
     sale_items = db.relationship("SaleItem", back_populates="product")
     stock_movements = db.relationship("StockMovement", back_populates="product")
+    restocks = db.relationship("Restock", back_populates="product")
 
     def to_dict(self):
         return {"id": self.id, "category_id": self.category_id, "category": self.category.name if self.category else None,

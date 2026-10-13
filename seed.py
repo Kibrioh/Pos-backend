@@ -11,6 +11,7 @@ from models import (
     Sale,
     SaleItem,
     StockMovement,
+    Restock,
 )
 
 
@@ -22,6 +23,7 @@ with app.app_context():
         db.session.execute(
             text("""
                 TRUNCATE TABLE
+                    restocks,
                     stock_movements,
                     sale_items,
                     sales,
@@ -202,6 +204,70 @@ with app.app_context():
                     note=f"Stock deducted for seeded sale #{sale.id}.",
                 )
             )
+              
+        # --------------------------------------------------
+        # 6.5 SAMPLE RESTOCKS AND LINKED MOVEMENTS
+        # --------------------------------------------------
+        restock_specs = [
+            {
+                "product": flour,
+                "quantity": 50,
+                "unit_cost": Decimal("150.00"),
+                "supplier": "Nairobi Wholesale Supplies",
+                "invoice_number": "INV-2026-0042",
+                "note": "Weekly restock",
+            },
+            {
+                "product": water,
+                "quantity": 100,
+                "unit_cost": Decimal("40.00"),
+                "supplier": "Coastal Beverages Ltd",
+                "invoice_number": "INV-2026-0043",
+                "note": "Bulk water order",
+            },
+            {
+                "product": soap,
+                "quantity": 30,
+                "unit_cost": Decimal("80.00"),
+                "supplier": "Nairobi Wholesale Supplies",
+                "invoice_number": "INV-2026-0044",
+                "note": None,
+            },
+        ]
+
+        for spec in restock_specs:
+            product = spec["product"]
+            quantity = spec["quantity"]
+
+            stock_before = product.stock_quantity
+            stock_after = stock_before + quantity
+
+            restock = Restock(
+                product=product,
+                user=manager,
+                quantity=quantity,
+                unit_cost=spec["unit_cost"],
+                supplier=spec["supplier"],
+                invoice_number=spec["invoice_number"],
+                note=spec["note"],
+            )
+            db.session.add(restock)
+            db.session.flush()
+
+            product.stock_quantity = stock_after
+
+            db.session.add(
+                StockMovement(
+                    product=product,
+                    user=manager,
+                    movement_type="restock",
+                    quantity_delta=quantity,
+                    stock_before=stock_before,
+                    stock_after=stock_after,
+                    restock_id=restock.id,
+                    note=f"Linked to restock {spec['invoice_number']}",
+                )
+            )
 
         # --------------------------------------------------
         # 7. COMMIT ALL CHANGES
@@ -214,7 +280,8 @@ with app.app_context():
         print("Products: 3")
         print("Sample sales: 1")
         print("Sale items: 3")
-        print("Stock movements: 6")
+        print("Stock movements: 9")
+        print("Restocks: 3")
         print(f"Sample sale total: {total_amount}")
 
     except Exception:
