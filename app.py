@@ -11,6 +11,7 @@ def create_app(config_class=Config):
     migrate.init_app(app, db)
     cors.init_app(app, resources={r"/api/*": {"origins": app.config["FRONTEND_ORIGIN"]}})
 
+    #test connection to postgresql
     @app.get("/api/health")
     def health():
         try:
