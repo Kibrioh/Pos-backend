@@ -12,6 +12,7 @@ class User(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     sales = db.relationship("Sale", back_populates="user")
     stock_movements = db.relationship("StockMovement", back_populates="user")
+    restocks = db.relationship("Restock", back_populates="user")
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

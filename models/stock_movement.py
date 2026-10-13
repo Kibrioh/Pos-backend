@@ -19,9 +19,24 @@ class StockMovement(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     product = db.relationship("Product", back_populates="stock_movements")
     user = db.relationship("User", back_populates="stock_movements")
+    restock_id = db.Column(
+        db.Integer,
+        db.ForeignKey("restocks.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    restock = db.relationship("Restock", back_populates="stock_movement")
 
     def to_dict(self):
-        return {"id": self.id, "product_id": self.product_id, "user_id": self.user_id,
-                "movement_type": self.movement_type, "quantity_delta": self.quantity_delta,
-                "stock_before": self.stock_before, "stock_after": self.stock_after,
-                "note": self.note, "created_at": self.created_at.isoformat()}
+        return {
+            "id": self.id,
+            "product_id": self.product_id,
+            "user_id": self.user_id,
+            "movement_type": self.movement_type,
+            "quantity_delta": self.quantity_delta,
+            "stock_before": self.stock_before,
+            "stock_after": self.stock_after,
+            "restock_id": self.restock_id,
+            "note": self.note,
+            "created_at": self.created_at.isoformat(),
+        }
