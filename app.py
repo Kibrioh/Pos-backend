@@ -3,6 +3,8 @@ from config import Config
 from extensions import db, migrate, cors
 from sqlalchemy import text
 from models import User, Category, Product, Sale, SaleItem, StockMovement
+from routes import stock_bp
+
 
 def create_app(config_class=Config):
     app = Flask(__name__)
@@ -31,7 +33,8 @@ def create_app(config_class=Config):
                 "message": "Database connection failed",
                 "error": str(e)
             }), 500
-
+    
+    app.register_blueprint(stock_bp)
     return app
 
 app = create_app()
