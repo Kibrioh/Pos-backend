@@ -116,7 +116,6 @@ pip install -r requirements.txt
 sudo service postgresql start
 sudo service postgresql status
 sudo -u postgres psql
-```
 
 **Note:** The `venv` and PostgreSQL installation commands are only needed if those components do not already exist. Replace all example project, database, and username values with your team's actual values.
 
