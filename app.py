@@ -3,7 +3,13 @@ from config import Config
 from extensions import db, migrate, cors, jwt
 from sqlalchemy import text
 from models import User, Category, Product, Sale, SaleItem, StockMovement
-from routes import categories_bp, products_bp, restocks_bp, stock_bp
+from routes import (
+    categories_bp,
+    products_bp,
+    restocks_bp,
+    stock_bp,
+    reports_bp,
+)
 
 
 def create_app(config_class=Config):
@@ -56,6 +62,7 @@ def create_app(config_class=Config):
     app.register_blueprint(restocks_bp)
     app.register_blueprint(categories_bp)
     app.register_blueprint(products_bp)
+    app.register_blueprint(reports_bp)
     return app
 
 app = create_app()
