@@ -34,7 +34,7 @@ def get_category(category_id):
     return jsonify(category.to_dict())
 
 
-@bp.post("/create")
+@bp.post("")
 def create_category():
     payload = _json_payload()
     if payload is None:
@@ -57,7 +57,7 @@ def create_category():
     return jsonify(category.to_dict()), 201
 
 
-@bp.put("update/<int:category_id>")
+@bp.put("/<int:category_id>")
 def update_category(category_id):
     category = Category.query.get_or_404(category_id)
     payload = _json_payload()
