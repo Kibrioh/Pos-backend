@@ -9,6 +9,7 @@ from routes import (
     restocks_bp,
     stock_bp,
     reports_bp,
+    sales_bp,
 )
 
 
@@ -63,6 +64,7 @@ def create_app(config_class=Config):
     app.register_blueprint(categories_bp)
     app.register_blueprint(products_bp)
     app.register_blueprint(reports_bp)
+    app.register_blueprint(sales_bp)
     return app
 
 app = create_app()

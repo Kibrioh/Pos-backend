@@ -223,3 +223,94 @@ def deduct_stock(product_id, quantity, user_id, sale_id=None, note=None):
 def _require_positive_int(value, field):
     if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
         raise ServiceError(f"{field} must be a positive integer")
+
+
+# --------------------------------------------------
+# Restock: Update & Delete
+# --------------------------------------------------
+
+def update_restock(restock_id, payload):
+    """
+    Update restock metadata (supplier, invoice_number, unit_cost, note).
+    Quantity and product_id are immutable — delete and re-create instead.
+    """
+    restock = db.session.get(Restock, restock_id)
+    if not restock:
+        raise ServiceError(f"Restock {restock_id} not found", 404)
+
+    if "quantity" in payload or "product_id" in payload or "user_id" in payload:
+        raise ServiceError(
+            "quantity, product_id, and user_id cannot be changed on a restock. "
+            "Delete and re-create if you need to change them."
+        )
+
+    if "supplier" in payload:
+        restock.supplier = payload["supplier"]
+    if "invoice_number" in payload:
+        restock.invoice_number = payload["invoice_number"]
+    if "note" in payload:
+        restock.note = payload["note"]
+
+    if "unit_cost" in payload:
+        raw = payload["unit_cost"]
+        if raw is None:
+            restock.unit_cost = None
+        else:
+            try:
+                unit_cost = Decimal(str(raw))
+            except (InvalidOperation, ValueError):
+                raise ServiceError("unit_cost must be a valid number")
+            if unit_cost < 0:
+                raise ServiceError("unit_cost cannot be negative")
+            restock.unit_cost = unit_cost
+
+    db.session.commit()
+    return restock.to_dict()
+
+
+def delete_restock(restock_id):
+    """
+    Delete a restock, reversing its stock change with a compensating movement.
+    Fails if reversing would push stock below zero (some units already sold).
+    """
+    restock = db.session.get(Restock, restock_id)
+    if not restock:
+        raise ServiceError(f"Restock {restock_id} not found", 404)
+
+    product = db.session.get(Product, restock.product_id)
+    if not product:
+        raise ServiceError("Product for this restock no longer exists", 404)
+
+    if product.stock_quantity < restock.quantity:
+        raise ServiceError(
+            f"Cannot delete: reversing would push stock below zero "
+            f"(current {product.stock_quantity}, need to subtract {restock.quantity}). "
+            f"Some units have already been sold."
+        )
+
+    before = product.stock_quantity
+    after = before - restock.quantity
+    product.stock_quantity = after
+
+    reversal = StockMovement(
+        product_id=product.id,
+        user_id=restock.user_id,
+        movement_type="adjustment",
+        quantity_delta=-restock.quantity,
+        stock_before=before,
+        stock_after=after,
+        note=(
+            f"Reversal of deleted restock #{restock.id} "
+            f"({restock.invoice_number or 'no invoice'})"
+        ),
+    )
+    db.session.add(reversal)
+
+    db.session.delete(restock)
+    db.session.commit()
+
+    return {
+        "deleted_restock_id": restock_id,
+        "product": product.to_dict(),
+        "reversal_movement": reversal.to_dict(),
+    }
