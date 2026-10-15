@@ -131,7 +131,7 @@ def create_product():
     return jsonify(product.to_dict()), 201
 
 
-@bp.put("/<int:product_id>")
+@bp.put("update/<int:product_id>")
 def update_product(product_id):
     product = Product.query.get_or_404(product_id)
     payload = _json_payload()

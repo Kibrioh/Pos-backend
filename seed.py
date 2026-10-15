@@ -219,12 +219,12 @@ with app.app_context():
         # GENERATE PRODUCTS
         # --------------------------------------------------
 
-        TARGET_PRODUCT_COUNT = 50
+        TARGET_PRODUCT_COUNT = 10
 
         
         special_stock = {
             "Maize Flour 2kg": 10, 
-            "Bottled Water 1L": 20,
+            "Bottled Water 1L": 4,
             "Laundry Soap": 20,
         }
 
@@ -241,13 +241,51 @@ with app.app_context():
             "Classic", "Plus", "XL", "Mini",
         ]
 
+        
+        # Keep the three products needed by the sample sale and restocking.
+        required_titles = {
+            "Maize Flour 2kg",
+            "Bottled Water 1L",
+            "Laundry Soap",
+        }
+
+        # Separate required products from the remaining catalogue.
+        required_specs = [
+            spec for spec in product_specs
+            if spec[1] in required_titles
+        ]
+
+        other_specs = [
+            spec for spec in product_specs
+            if spec[1] not in required_titles
+        ]
+
+        if len(required_specs) != len(required_titles):
+            raise ValueError(
+                "One or more required products are missing from the catalogue."
+            )
+
+        # Select only enough other products to reach the target.
+        random.shuffle(other_specs)
+
+        remaining_slots = TARGET_PRODUCT_COUNT - len(required_specs)
+
+        product_specs = required_specs + other_specs[:remaining_slots]
+
+        # Generate variants only if the catalogue has fewer products than the target.
         existing_titles = {spec[1] for spec in product_specs}
+        variant_suffixes = [
+            "Standard", "Premium", "Compact", "Deluxe",
+            "Classic", "Plus", "XL", "Mini",
+        ]
+
         variant_specs = []
 
         while len(product_specs) + len(variant_specs) < TARGET_PRODUCT_COUNT:
             category_name, title, brand, low_price, high_price = random.choice(
                 product_specs
             )
+
             suffix = random.choice(variant_suffixes)
             variant_title = f"{title} - {suffix}"
 
@@ -257,14 +295,17 @@ with app.app_context():
                     (category_name, variant_title, brand, low_price, high_price)
                 )
 
-        all_specs = product_specs + variant_specs
+        all_specs = (product_specs + variant_specs)[:TARGET_PRODUCT_COUNT]
         random.shuffle(all_specs)
+
+        print(f"Products to create: {len(all_specs)}")
+
 
         products = []
 
         for category_name, title, brand, low_price, high_price in all_specs:
-            stock = special_stock.get(title, random.randint(0, 100))
-            threshold = random.choice([5, 10, 15, 20])
+            stock = special_stock.get(title, random.randint(0, 10))
+            threshold = 5
 
             product = Product(
                 title=title,
