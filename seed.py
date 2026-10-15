@@ -244,6 +244,13 @@ with app.app_context():
         
         # Keep the three products needed by the sample sale and restocking.
         required_titles = {
+            "Non-stick Frying Pan",
+            "Wireless Printer",
+            "Microwave Oven",
+            "Face Moisturizer",
+            "Baby Stroller",
+            "Perfume 100ml",
+            "Bedsheet Set",
             "Maize Flour 2kg",
             "Bottled Water 1L",
             "Laundry Soap",
@@ -300,7 +307,18 @@ with app.app_context():
 
         print(f"Products to create: {len(all_specs)}")
 
-
+        PRODUCT_IMAGES = {
+            "Non-stick Frying Pan": "https://shorturl.at/ysGk0",
+            "Wireless Printer": "https://shorturl.at/pVdQK",
+            "Microwave Oven": "https://shorturl.at/0A4le",
+            "Face Moisturizer": "https://shorturl.at/xCjf2",
+            "Baby Stroller": "https://shorturl.at/RWjyb",
+            "Perfume 100ml": "https://tinyurl.com/mwp9kwhy",
+            "Bedsheet Set": "https://tinyurl.com/2madrztk",
+            "Maize Flour 2kg": "https://tinyurl.com/5jns8z3k",
+            "Bottled Water 1L": "https://tinyurl.com/yr5hexh4",
+            "Laundry Soap": "https://tinyurl.com/y4db26tb",
+        }
         products = []
 
         for category_name, title, brand, low_price, high_price in all_specs:
@@ -314,7 +332,10 @@ with app.app_context():
                 stock_quantity=stock,
                 low_stock_threshold=threshold,
                 category=categories[category_name],
-                thumbnail=None,
+                thumbnail=PRODUCT_IMAGES.get(
+                        title,
+                        "https://tinyurl.com/2e2ssvab"
+                    ),
                 description=fake.sentence(nb_words=12),
             )
 
@@ -331,17 +352,18 @@ with app.app_context():
         # Keep the generated Product objects in `products`.
         # Record initial stock for every generated product.
         for product in products:
-            db.session.add(
-                StockMovement(
-                    product=product,
-                    user=manager,
-                    movement_type="initial_stock",
-                    quantity_delta=product.stock_quantity,
-                    stock_before=0,
-                    stock_after=product.stock_quantity,
-                    note="Initial stock created by development seed.",
+            if product.stock_quantity > 0:
+                db.session.add(
+                    StockMovement(
+                        product=product,
+                        user=manager,
+                        movement_type="initial_stock",
+                        quantity_delta=product.stock_quantity,
+                        stock_before=0,
+                        stock_after=product.stock_quantity,
+                        note="Initial stock created by development seed.",
+                    )
                 )
-            )
 
         # Retrieve specific products for the sample sale and restocks.
         flour = next(
