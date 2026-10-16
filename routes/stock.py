@@ -11,6 +11,7 @@ from services.stock_service import (
     restock_product,
 )
 
+from utils.auth import manager_required
 bp = Blueprint("stock", __name__, url_prefix="/api/stock")
 
 
@@ -43,6 +44,7 @@ def movements_for_product(product_id):
 
 
 @bp.post("/restock")
+@manager_required
 def restock():
     payload = request.get_json(silent=True) or {}
     try:
@@ -53,6 +55,7 @@ def restock():
 
 
 @bp.post("/adjust")
+@manager_required
 def adjust():
     payload = request.get_json(silent=True) or {}
     try:
