@@ -8,6 +8,7 @@ from services.stock_service import (
     restock_product,
     update_restock,
 )
+from utils.auth import manager_required
 
 bp = Blueprint("restocks", __name__, url_prefix="/api/restocks")
 
@@ -26,6 +27,7 @@ def get_restock(restock_id):
 
 
 @bp.post("")
+@manager_required              
 def create_restock():
     payload = request.get_json(silent=True) or {}
     try:
@@ -36,6 +38,7 @@ def create_restock():
 
 
 @bp.put("/<int:restock_id>")
+@manager_required             
 def update_restock_route(restock_id):
     payload = request.get_json(silent=True) or {}
     try:
@@ -46,6 +49,7 @@ def update_restock_route(restock_id):
 
 
 @bp.delete("/<int:restock_id>")
+@manager_required             
 def delete_restock_route(restock_id):
     try:
         result = delete_restock(restock_id)
