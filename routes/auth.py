@@ -90,3 +90,9 @@ def change_password():
     user.set_password(new_pw)
     db.session.commit()
     return jsonify(status="success", message="Password updated"), 200
+
+@auth_bp.get("/users")
+@manager_required
+def list_users():
+    users = User.query.order_by(User.created_at.desc()).all()
+    return jsonify(status="success", users=[u.to_dict() for u in users]), 200
