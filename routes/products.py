@@ -5,6 +5,7 @@ from flask import Blueprint, jsonify, request
 from extensions import db
 from models import Category, Product
 
+from utils.auth import manager_required
 bp = Blueprint("products", __name__, url_prefix="/api/products")
 
 
@@ -82,6 +83,7 @@ def get_product(product_id):
 
 
 @bp.post("")
+@manager_required
 def create_product():
     payload = _json_payload()
     if payload is None:
@@ -132,6 +134,7 @@ def create_product():
 
 
 @bp.put("/<int:product_id>")
+@manager_required
 def update_product(product_id):
     product = Product.query.get_or_404(product_id)
     payload = _json_payload()
