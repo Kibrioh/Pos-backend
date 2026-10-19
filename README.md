@@ -96,7 +96,8 @@ There is no default database: if `DATABASE_URL` is missing, the app will not sta
     python seed.py
 
 > **Warning:** `seed.py` first **deletes all rows** in users, categories,
-> products, sales, sale items, stock movements and restocks, then inserts demo
+> products, sales, sale items, stock movements, restocks, shifts, suppliers,
+> purchase orders, returns, and audit history, then inserts demo
 > data. Run it only on a development database. The demo usernames and
 > passwords are at the top of `seed.py`.
 
@@ -144,8 +145,9 @@ Errors use the shape `{"status": "error", "message": "..."}`.
 |--------|------|--------|---------|
 | GET | `/api/products` | public | list products |
 | GET | `/api/products/<id>` | public | one product |
-| POST | `/api/products` | manager | create. Fields: `title`, `brand`, `description`, `price`, `stock_quantity`, `low_stock_threshold`, `thumbnail`, `category_id` |
+| POST | `/api/products` | manager | create. Fields include `title`, `brand`, `barcode`, `unit_cost`, `description`, `price`, `stock_quantity`, `low_stock_threshold`, `thumbnail`, `category_id` |
 | PUT | `/api/products/<id>` | manager | update the same fields |
+| DELETE | `/api/products/<id>` | manager | archive from the active catalogue while preserving sales and stock history |
 | GET / POST | `/api/categories` | see code | list / create |
 | GET / PUT | `/api/categories/<id>` | see code | one / update |
 
@@ -161,6 +163,14 @@ Errors use the shape `{"status": "error", "message": "..."}`.
 | POST | `/api/stock/restock` | manager | `{product_id, quantity, user_id, unit_cost, supplier, invoice_number, note}` |
 | GET / POST | `/api/restocks` | see code | list / create restocks |
 | GET / PUT / DELETE | `/api/restocks/<id>` | see code | one / update details / delete (reverses the stock) |
+| GET / POST | `/api/suppliers` | manager | list / create suppliers |
+| GET / POST | `/api/purchase-orders` | manager | list / create supplier orders |
+| POST | `/api/purchase-orders/<id>/receive` | manager | receive all or selected quantities; updates stock, average cost, restocks, and ledger |
+| GET | `/api/shifts/current` | login | current user's open till shift |
+| GET | `/api/shifts` | manager | recent shifts and reconciliations |
+| POST | `/api/shifts/open` | login | open a till with an opening float |
+| POST | `/api/shifts/<id>/cash-movements` | login | record till cash in/out with a reason |
+| POST | `/api/shifts/<id>/close` | login | close a shift and calculate expected cash / variance |
 
 ### Sales: `/api/sales`
 
@@ -169,6 +179,7 @@ Errors use the shape `{"status": "error", "message": "..."}`.
 | POST | `/api/sales` | login | create a sale for the logged-in user |
 | GET | `/api/sales` | manager | list all sales, newest first |
 | GET | `/api/sales/<id>` | login | one sale |
+| POST | `/api/sales/<id>/returns` | manager | partial/full return with refund method, reason, and optional stock return |
 
 Create a sale. The client sends only product ids and quantities, never prices:
 
@@ -213,9 +224,14 @@ Response `201`:
 
 ### Reports: `/api/reports`
 
-`/dashboard`, `/summary`, `/sales-by-date`, `/sales-by-cashier`,
+`/dashboard`, `/summary`, `/gross-margin`, `/sales-by-date`, `/sales-by-cashier`,
 `/best-selling-products` (all GET). The role needed for each is defined in
 `routes/reports.py`.
+
+`GET /api/audit` returns the latest audited product, stock, sale, return,
+purchase order, and till actions to managers. Gross margin is based on the
+cost snapshot captured at sale time; sales without recorded costs are counted
+as missing cost data.
 
 ### Health
 

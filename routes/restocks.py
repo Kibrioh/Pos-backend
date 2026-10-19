@@ -8,7 +8,7 @@ from services.stock_service import (
     restock_product,
     update_restock,
 )
-from utils.auth import manager_required
+from utils.auth import get_current_user, manager_required
 
 bp = Blueprint("restocks", __name__, url_prefix="/api/restocks")
 
@@ -31,7 +31,7 @@ def get_restock(restock_id):
 def create_restock():
     payload = request.get_json(silent=True) or {}
     try:
-        result = restock_product(payload)
+        result = restock_product(payload, get_current_user().id)
     except ServiceError as e:
         return jsonify({"status": "error", "message": str(e)}), e.status_code
     return jsonify(result), 201
@@ -42,7 +42,7 @@ def create_restock():
 def update_restock_route(restock_id):
     payload = request.get_json(silent=True) or {}
     try:
-        result = update_restock(restock_id, payload)
+        result = update_restock(restock_id, payload, get_current_user().id)
     except ServiceError as e:
         return jsonify({"status": "error", "message": str(e)}), e.status_code
     return jsonify(result), 200
@@ -52,7 +52,7 @@ def update_restock_route(restock_id):
 @manager_required             
 def delete_restock_route(restock_id):
     try:
-        result = delete_restock(restock_id)
+        result = delete_restock(restock_id, get_current_user().id)
     except ServiceError as e:
         return jsonify({"status": "error", "message": str(e)}), e.status_code
     return jsonify(result), 200

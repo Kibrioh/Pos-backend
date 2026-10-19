@@ -11,7 +11,7 @@ from services.stock_service import (
     restock_product,
 )
 
-from utils.auth import manager_required
+from utils.auth import get_current_user, manager_required
 bp = Blueprint("stock", __name__, url_prefix="/api/stock")
 
 
@@ -48,7 +48,7 @@ def movements_for_product(product_id):
 def restock():
     payload = request.get_json(silent=True) or {}
     try:
-        result = restock_product(payload)
+        result = restock_product(payload, get_current_user().id)
     except ServiceError as e:
         return jsonify({"status": "error", "message": str(e)}), e.status_code
     return jsonify(result), 201
@@ -59,7 +59,7 @@ def restock():
 def adjust():
     payload = request.get_json(silent=True) or {}
     try:
-        result = adjust_stock(payload)
+        result = adjust_stock(payload, get_current_user().id)
     except ServiceError as e:
         return jsonify({"status": "error", "message": str(e)}), e.status_code
     return jsonify(result), 201

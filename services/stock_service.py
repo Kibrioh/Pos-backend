@@ -1,7 +1,8 @@
 from decimal import Decimal, InvalidOperation
 
 from extensions import db
-from models import Product, Restock, StockMovement, User
+from models import Product, Restock, StockMovement, Supplier, User
+from services.audit_service import add_audit_event
 
 
 class ServiceError(Exception):
@@ -15,13 +16,19 @@ class ServiceError(Exception):
 # --------------------------------------------------
 
 def get_all_stock():
-    products = Product.query.order_by(Product.title.asc()).all()
+    products = (
+        Product.query
+        .filter(Product.is_active.is_(True))
+        .order_by(Product.title.asc())
+        .all()
+    )
     return [p.to_dict() for p in products]
 
 
 def get_low_stock():
     products = (
         Product.query
+        .filter(Product.is_active.is_(True))
         .filter(Product.stock_quantity > 0)
         .filter(Product.stock_quantity <= Product.low_stock_threshold)
         .order_by(Product.stock_quantity.asc())
@@ -33,6 +40,7 @@ def get_low_stock():
 def get_out_of_stock():
     products = (
         Product.query
+        .filter(Product.is_active.is_(True))
         .filter(Product.stock_quantity <= 0)
         .order_by(Product.title.asc())
         .all()
@@ -74,10 +82,10 @@ def get_restock_by_id(restock_id):
 # Writes
 # --------------------------------------------------
 
-def restock_product(payload):
+def restock_product(payload, actor_id=None):
     product_id = payload.get("product_id")
     quantity = payload.get("quantity")
-    user_id = payload.get("user_id")
+    user_id = actor_id or payload.get("user_id")
     unit_cost_raw = payload.get("unit_cost")
     supplier = payload.get("supplier")
     invoice_number = payload.get("invoice_number")
@@ -93,12 +101,20 @@ def restock_product(payload):
             unit_cost = Decimal(str(unit_cost_raw))
         except (InvalidOperation, ValueError):
             raise ServiceError("unit_cost must be a valid number")
-        if unit_cost < 0:
+        if not unit_cost.is_finite() or unit_cost < 0:
             raise ServiceError("unit_cost cannot be negative")
 
     product = db.session.get(Product, product_id)
-    if not product:
-        raise ServiceError(f"Product {product_id} not found", 404)
+    if not product or not product.is_active:
+        raise ServiceError(f"Product {product_id} not found or is inactive", 404)
+
+    supplier_id = payload.get("supplier_id")
+    supplier_record = None
+    if supplier_id is not None:
+        _require_positive_int(supplier_id, "supplier_id")
+        supplier_record = db.session.get(Supplier, supplier_id)
+        if not supplier_record or not supplier_record.is_active:
+            raise ServiceError("Supplier not found or inactive", 404)
 
     user = db.session.get(User, user_id)
     if not user:
@@ -106,13 +122,23 @@ def restock_product(payload):
 
     before = product.stock_quantity
     after = before + quantity
+    if unit_cost is not None:
+        if before == 0:
+            product.unit_cost = unit_cost
+        elif product.unit_cost is not None:
+            product.unit_cost = (
+                (Decimal(str(product.unit_cost)) * before)
+                + (unit_cost * quantity)
+            ) / Decimal(after)
+            product.unit_cost = product.unit_cost.quantize(Decimal("0.0001"))
 
     restock = Restock(
         product_id=product.id,
+        supplier_id=supplier_record.id if supplier_record else None,
         user_id=user.id,
         quantity=quantity,
         unit_cost=unit_cost,
-        supplier=supplier,
+        supplier=supplier_record.name if supplier_record else supplier,
         invoice_number=invoice_number,
         note=note,
     )
@@ -132,6 +158,13 @@ def restock_product(payload):
         note=note or f"Linked to restock {restock.invoice_number or restock.id}",
     )
     db.session.add(movement)
+    add_audit_event(user.id, "stock.restocked", "product", product.id, {
+        "quantity": quantity,
+        "stock_before": before,
+        "stock_after": after,
+        "unit_cost": str(unit_cost) if unit_cost is not None else None,
+        "supplier_id": supplier_record.id if supplier_record else None,
+    })
     db.session.commit()
 
     return {
@@ -141,10 +174,10 @@ def restock_product(payload):
     }
 
 
-def adjust_stock(payload):
+def adjust_stock(payload, actor_id=None):
     product_id = payload.get("product_id")
     delta = payload.get("delta")
-    user_id = payload.get("user_id")
+    user_id = actor_id or payload.get("user_id")
     note = payload.get("note")
 
     _require_positive_int(product_id, "product_id")
@@ -153,8 +186,8 @@ def adjust_stock(payload):
         raise ServiceError("delta must be a non-zero integer")
 
     product = db.session.get(Product, product_id)
-    if not product:
-        raise ServiceError(f"Product {product_id} not found", 404)
+    if not product or not product.is_active:
+        raise ServiceError(f"Product {product_id} not found or is inactive", 404)
 
     user = db.session.get(User, user_id)
     if not user:
@@ -179,6 +212,12 @@ def adjust_stock(payload):
         note=note or None,
     )
     db.session.add(movement)
+    add_audit_event(user.id, "stock.adjusted", "product", product.id, {
+        "delta": delta,
+        "stock_before": before,
+        "stock_after": after,
+        "note": note or None,
+    })
     db.session.commit()
 
     return {"product": product.to_dict(), "movement": movement.to_dict()}
@@ -191,8 +230,8 @@ def deduct_stock(product_id, quantity, user_id, sale_id=None, note=None):
     """
     _require_positive_int(quantity, "quantity")
     product = db.session.get(Product, product_id)
-    if not product:
-        raise ServiceError(f"Product {product_id} not found", 404)
+    if not product or not product.is_active:
+        raise ServiceError(f"Product {product_id} not found or is inactive", 404)
 
     if product.stock_quantity < quantity:
         raise ServiceError(
@@ -229,7 +268,7 @@ def _require_positive_int(value, field):
 # Restock: Update & Delete
 # --------------------------------------------------
 
-def update_restock(restock_id, payload):
+def update_restock(restock_id, payload, actor_id=None):
     """
     Update restock metadata (supplier, invoice_number, unit_cost, note).
     Quantity and product_id are immutable — delete and re-create instead.
@@ -264,11 +303,15 @@ def update_restock(restock_id, payload):
                 raise ServiceError("unit_cost cannot be negative")
             restock.unit_cost = unit_cost
 
+    add_audit_event(actor_id or restock.user_id, "restock.updated", "restock", restock.id, {
+        "supplier": restock.supplier,
+        "invoice_number": restock.invoice_number,
+    })
     db.session.commit()
     return restock.to_dict()
 
 
-def delete_restock(restock_id):
+def delete_restock(restock_id, actor_id=None):
     """
     Delete a restock, reversing its stock change with a compensating movement.
     Fails if reversing would push stock below zero (some units already sold).
@@ -307,6 +350,10 @@ def delete_restock(restock_id):
     db.session.add(reversal)
 
     db.session.delete(restock)
+    add_audit_event(actor_id or restock.user_id, "restock.deleted", "restock", restock_id, {
+        "product_id": product.id,
+        "quantity": restock.quantity,
+    })
     db.session.commit()
 
     return {

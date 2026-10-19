@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from decimal import Decimal
+from sqlalchemy import true
 from extensions import db
 
 class Product(db.Model):
@@ -13,9 +14,12 @@ class Product(db.Model):
     category_id = db.Column(db.Integer, db.ForeignKey("categories.id", ondelete="RESTRICT"), index=True)
     title = db.Column(db.String(200), nullable=False, index=True)
     brand = db.Column(db.String(120))
-    price = db.Column(db.Numeric(12, 2), nullable=False, default=Decimal("0.00"))
+    barcode = db.Column(db.String(80), unique=True, index=True)
+    price = db.Column(db.Numeric(12, 4), nullable=False, default=Decimal("0.0000"))
+    unit_cost = db.Column(db.Numeric(12, 4))
     stock_quantity = db.Column(db.Integer, nullable=False, default=0)
     low_stock_threshold = db.Column(db.Integer, nullable=False, default=5)
+    is_active = db.Column(db.Boolean, nullable=False, default=True, server_default=true())
     thumbnail = db.Column(db.Text)
     description = db.Column(db.Text)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
@@ -28,6 +32,9 @@ class Product(db.Model):
     def to_dict(self):
         return {"id": self.id, "category_id": self.category_id, "category": self.category.name if self.category else None,
                 "title": self.title, "brand": self.brand, "price": str(self.price),
+                "barcode": self.barcode,
+                "unit_cost": str(self.unit_cost) if self.unit_cost is not None else None,
                 "stock_quantity": self.stock_quantity, "low_stock_threshold": self.low_stock_threshold,
+                "is_active": self.is_active,
                 "thumbnail": self.thumbnail, "description": self.description,
                 "created_at": self.created_at.isoformat(), "updated_at": self.updated_at.isoformat()}

@@ -5,7 +5,7 @@ from flask import Blueprint, jsonify, request
 from sqlalchemy import func
 
 from extensions import db
-from models import Product, Sale, SaleItem, User
+from models import Product, Sale, SaleItem, SaleReturn, SaleReturnItem, User
 from utils.auth import manager_required
 
 bp = Blueprint("reports", __name__, url_prefix="/api/reports")
@@ -54,6 +54,16 @@ def money(value):
     return str(Decimal(str(value)))
 
 
+def net_revenue_expression():
+    refunded = (
+        db.session.query(func.coalesce(func.sum(SaleReturn.refund_total), 0))
+        .filter(SaleReturn.sale_id == Sale.id)
+        .correlate(Sale)
+        .scalar_subquery()
+    )
+    return Sale.total_amount - refunded
+
+
 @bp.get("/summary")
 @manager_required
 def sales_summary():
@@ -62,7 +72,7 @@ def sales_summary():
         return error
 
     revenue, count = query.with_entities(
-        func.coalesce(func.sum(Sale.total_amount), 0),
+        func.coalesce(func.sum(net_revenue_expression()), 0),
         func.count(Sale.id),
     ).one()
 
@@ -84,11 +94,11 @@ def sales_by_cashier():
         User.id.label("user_id"),
         User.username,
         User.name,
-        func.sum(Sale.total_amount).label("total_revenue"),
+        func.sum(net_revenue_expression()).label("total_revenue"),
         func.count(Sale.id).label("transaction_count"),
     ).group_by(
         User.id, User.username, User.name
-    ).order_by(func.sum(Sale.total_amount).desc()).all()
+    ).order_by(func.sum(net_revenue_expression()).desc()).all()
 
     return jsonify(status="success", results=[
         {
@@ -111,7 +121,7 @@ def sales_by_date():
 
     rows = query.with_entities(
         func.date(Sale.created_at).label("sale_date"),
-        func.sum(Sale.total_amount).label("total_revenue"),
+        func.sum(net_revenue_expression()).label("total_revenue"),
         func.count(Sale.id).label("transaction_count"),
     ).group_by(
         func.date(Sale.created_at)
@@ -150,15 +160,40 @@ def best_selling_products():
         Product.title.asc(),
     ).all()
 
-    return jsonify(status="success", results=[
+    sale_ids = query.with_entities(Sale.id)
+    returned_rows = (
+        db.session.query(
+            SaleReturnItem.product_id,
+            func.sum(SaleReturnItem.quantity),
+            func.sum(SaleReturnItem.unit_price * SaleReturnItem.quantity),
+        )
+        .join(SaleReturn, SaleReturn.id == SaleReturnItem.sale_return_id)
+        .filter(SaleReturn.sale_id.in_(sale_ids))
+        .group_by(SaleReturnItem.product_id)
+        .all()
+    )
+    returned_by_product = {
+        product_id: (int(quantity), Decimal(str(revenue)))
+        for product_id, quantity, revenue in returned_rows
+    }
+
+    results = [
         {
             "product_id": row.product_id,
             "product_title": row.product_title,
-            "quantity_sold": int(row.quantity_sold),
-            "total_revenue": money(row.total_revenue),
+            "quantity_sold": max(
+                0,
+                int(row.quantity_sold) - returned_by_product.get(row.product_id, (0, Decimal("0")))[0],
+            ),
+            "total_revenue": money(
+                Decimal(str(row.total_revenue))
+                - returned_by_product.get(row.product_id, (0, Decimal("0")))[1]
+            ),
         }
         for row in rows
-    ]), 200
+    ]
+    results.sort(key=lambda result: (-result["quantity_sold"], result["product_title"]))
+    return jsonify(status="success", results=results), 200
 
 
 @bp.get("/dashboard")
@@ -169,11 +204,12 @@ def dashboard_summary():
         return error
 
     revenue, count = query.with_entities(
-        func.coalesce(func.sum(Sale.total_amount), 0),
+        func.coalesce(func.sum(net_revenue_expression()), 0),
         func.count(Sale.id),
     ).one()
 
     low_stock = Product.query.filter(
+        Product.is_active.is_(True),
         Product.stock_quantity <= Product.low_stock_threshold
     ).order_by(
         Product.stock_quantity.asc(),
@@ -184,7 +220,7 @@ def dashboard_summary():
         status="success",
         total_revenue=money(revenue),
         transaction_count=int(count),
-        product_count=Product.query.count(),
+        product_count=Product.query.filter(Product.is_active.is_(True)).count(),
         low_stock_count=len(low_stock),
         low_stock_products=[
             {
@@ -196,4 +232,39 @@ def dashboard_summary():
             for product in low_stock
         ],
         cashier_count=User.query.filter_by(role="cashier").count(),
+    ), 200
+
+
+@bp.get("/gross-margin")
+@manager_required
+def gross_margin_summary():
+    query, error = filtered_sales_query()
+    if error:
+        return error
+
+    gross_margin = Decimal("0.00")
+    net_revenue = Decimal("0.00")
+    items_without_cost = 0
+    for sale in query.all():
+        net_revenue += Decimal(str(sale.total_amount))
+        for sale_return in sale.returns:
+            net_revenue -= Decimal(str(sale_return.refund_total))
+        for item in sale.items:
+            if item.unit_cost is None:
+                items_without_cost += item.quantity
+                continue
+            gross_margin += (
+                Decimal(str(item.unit_price)) - Decimal(str(item.unit_cost))
+            ) * item.quantity
+        for sale_return in sale.returns:
+            for returned_item in sale_return.items:
+                if returned_item.restock and returned_item.unit_cost is not None:
+                    gross_margin += Decimal(str(returned_item.unit_cost)) * returned_item.quantity
+                gross_margin -= Decimal(str(returned_item.unit_price)) * returned_item.quantity
+
+    return jsonify(
+        status="success",
+        net_revenue=money(net_revenue),
+        gross_margin=money(gross_margin),
+        items_without_cost=items_without_cost,
     ), 200

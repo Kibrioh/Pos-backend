@@ -19,6 +19,12 @@ class Restock(db.Model):
         nullable=False,
         index=True,
     )
+    supplier_id = db.Column(
+        db.Integer,
+        db.ForeignKey("suppliers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     user_id = db.Column(
         db.Integer,
         db.ForeignKey("users.id", ondelete="RESTRICT"),
@@ -26,7 +32,7 @@ class Restock(db.Model):
         index=True,
     )
     quantity = db.Column(db.Integer, nullable=False)
-    unit_cost = db.Column(db.Numeric(12, 2), nullable=True)
+    unit_cost = db.Column(db.Numeric(12, 4), nullable=True)
     supplier = db.Column(db.String(120), nullable=True)
     invoice_number = db.Column(db.String(60), nullable=True)
     note = db.Column(db.Text)
@@ -37,6 +43,7 @@ class Restock(db.Model):
     )
 
     product = db.relationship("Product", back_populates="restocks")
+    supplier_record = db.relationship("Supplier", back_populates="restocks")
     user = db.relationship("User", back_populates="restocks")
     stock_movement = db.relationship(
         "StockMovement",
@@ -48,6 +55,7 @@ class Restock(db.Model):
         return {
             "id": self.id,
             "product_id": self.product_id,
+            "supplier_id": self.supplier_id,
             "user_id": self.user_id,
             "quantity": self.quantity,
             "unit_cost": str(self.unit_cost) if self.unit_cost is not None else None,

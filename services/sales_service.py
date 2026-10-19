@@ -3,9 +3,10 @@ from decimal import Decimal
 
 from extensions import db
 from models import Product, Sale, SaleItem, User
+from services.audit_service import add_audit_event
 from services.stock_service import ServiceError, deduct_stock
 
-TWO_PLACES = Decimal("0.01")
+BASE_CURRENCY_QUANTUM = Decimal("0.0001")
 
 
 def _clean_items(raw_items):
@@ -28,7 +29,7 @@ def _clean_items(raw_items):
     return wanted
 
 
-def create_sale(user_id, raw_items, payment_method="cash"):
+def create_sale(user_id, raw_items, payment_method="cash", shift_id=None):
     wanted = _clean_items(raw_items)
 
     try:
@@ -39,7 +40,9 @@ def create_sale(user_id, raw_items, payment_method="cash"):
         # Lock these product rows until we commit or roll back, so two cashiers
         # can't both sell the last unit. Sorting by id avoids deadlocks.
         products = (
-            Product.query.filter(Product.id.in_(list(wanted)))
+            Product.query
+            .filter(Product.id.in_(list(wanted)))
+            .filter(Product.is_active.is_(True))
             .order_by(Product.id)
             .populate_existing()
             .with_for_update()
@@ -61,26 +64,34 @@ def create_sale(user_id, raw_items, payment_method="cash"):
         if problems:
             raise ServiceError(" ".join(problems), 409)
 
-        sale = Sale(user_id=user.id, payment_method=payment_method)
+        sale = Sale(user_id=user.id, shift_id=shift_id, payment_method=payment_method)
         db.session.add(sale)
         db.session.flush()  # gets sale.id without committing yet
 
-        total = Decimal("0.00")
+        total = Decimal("0.0000")
         for product_id, qty in wanted.items():
             product = by_id[product_id]
             unit_price = product.price  # always from the database, never the client
-            subtotal = (unit_price * qty).quantize(TWO_PLACES)
+            subtotal = (unit_price * qty).quantize(BASE_CURRENCY_QUANTUM)
             total += subtotal
 
             db.session.add(SaleItem(
                 sale_id=sale.id, product_id=product.id,
-                quantity=qty, unit_price=unit_price, subtotal=subtotal,
+                quantity=qty, unit_price=unit_price,
+                unit_cost=product.unit_cost,
+                subtotal=subtotal,
             ))
             # The team's helper lowers stock and records the stock movement.
             # It does not commit; we do that once below.
             deduct_stock(product.id, qty, user.id, sale_id=sale.id)
 
         sale.total_amount = total
+        add_audit_event(user.id, "sale.completed", "sale", sale.id, {
+            "total_amount": str(total),
+            "payment_method": payment_method,
+            "item_count": len(wanted),
+            "shift_id": shift_id,
+        })
         db.session.commit()  # sale, items, stock and audit rows all succeed together
         return sale
 

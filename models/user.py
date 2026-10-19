@@ -11,6 +11,7 @@ class User(db.Model):
     role = db.Column(db.String(20), nullable=False, default="cashier")
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     sales = db.relationship("Sale", back_populates="user")
+    cashier_shifts = db.relationship("CashierShift", back_populates="user")
     stock_movements = db.relationship("StockMovement", back_populates="user")
     restocks = db.relationship("Restock", back_populates="user")
 
