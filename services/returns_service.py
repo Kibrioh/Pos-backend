@@ -4,6 +4,7 @@ from decimal import Decimal
 from extensions import db
 from models import CashMovement, CashierShift, Product, Sale, SaleItem, SaleReturn, SaleReturnItem, StockMovement
 from services.audit_service import add_audit_event
+from services.shift_service import expected_cash_for_shift
 from services.stock_service import ServiceError
 
 BASE_CURRENCY_QUANTUM = Decimal("0.0001")
@@ -81,6 +82,8 @@ def create_return(actor, sale_id, payload):
         shift = CashierShift.query.filter_by(id=shift_id, status="open").with_for_update().first()
         if shift is None:
             raise ServiceError("The selected till shift is not open", 409)
+        if total > expected_cash_for_shift(shift):
+            raise ServiceError("Cash refund exceeds the cash currently available in the till.", 409)
 
     return_record = SaleReturn(
         sale_id=sale.id,

@@ -170,7 +170,7 @@ Errors use the shape `{"status": "error", "message": "..."}`.
 | GET | `/api/shifts` | manager | recent shifts and reconciliations |
 | POST | `/api/shifts/assign` | manager | assign `{cashier_id, opening_cash}` and open that cashier's till |
 | POST | `/api/shifts/open` | manager | open the manager's own till with an opening float |
-| POST | `/api/shifts/<id>/cash-movements` | login | record till cash in/out with a reason |
+| POST | `/api/shifts/<id>/cash-movements` | manager | record an exceptional till cash in/out with a reason; cash sales and cash refunds are accounted for automatically, and cash out is limited to the available till balance |
 | POST | `/api/shifts/<id>/close` | login | close a shift and calculate expected cash / variance |
 
 ### Sales: `/api/sales`

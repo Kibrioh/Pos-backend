@@ -32,6 +32,7 @@ class StockMovement(db.Model):
             "id": self.id,
             "product_id": self.product_id,
             "user_id": self.user_id,
+            "user_name": self.user.name if self.user else None,
             "movement_type": self.movement_type,
             "quantity_delta": self.quantity_delta,
             "stock_before": self.stock_before,

@@ -4,6 +4,7 @@ from extensions import db
 from services.shift_service import (
     close_shift,
     assign_shift,
+    expected_cash_for_shift,
     get_current_shift,
     list_shifts,
     open_shift,
@@ -19,13 +20,24 @@ bp = Blueprint("shifts", __name__, url_prefix="/api/shifts")
 @login_required
 def current_shift():
     shift = get_current_shift(get_current_user().id)
-    return jsonify(shift.to_dict() if shift else None), 200
+    if shift is None:
+        return jsonify(None), 200
+    data = shift.to_dict()
+    data["expected_cash"] = str(expected_cash_for_shift(shift))
+    return jsonify(data), 200
 
 
 @bp.get("")
 @manager_required
 def all_shifts():
-    return jsonify([shift.to_dict() for shift in list_shifts(request.args.get("status"))]), 200
+    shifts = list_shifts(request.args.get("status"))
+    results = []
+    for shift in shifts:
+        data = shift.to_dict()
+        if shift.status == "open":
+            data["expected_cash"] = str(expected_cash_for_shift(shift))
+        results.append(data)
+    return jsonify(results), 200
 
 
 @bp.post("/open")
@@ -58,7 +70,7 @@ def assign_cashier_float():
 
 
 @bp.post("/<int:shift_id>/cash-movements")
-@login_required
+@manager_required
 def cash_movement(shift_id):
     user = get_current_user()
     payload = request.get_json(silent=True) or {}

@@ -1,5 +1,7 @@
 from decimal import Decimal, InvalidOperation
 
+from sqlalchemy.orm import joinedload
+
 from extensions import db
 from models import Product, Restock, StockMovement, Supplier, User
 from services.audit_service import add_audit_event
@@ -49,7 +51,12 @@ def get_out_of_stock():
 
 
 def get_movements():
-    movements = StockMovement.query.order_by(StockMovement.created_at.desc()).all()
+    movements = (
+        StockMovement.query
+        .options(joinedload(StockMovement.user))
+        .order_by(StockMovement.created_at.desc())
+        .all()
+    )
     return [m.to_dict() for m in movements]
 
 
@@ -59,6 +66,7 @@ def get_movements_for_product(product_id):
         raise ServiceError(f"Product {product_id} not found", 404)
     movements = (
         StockMovement.query
+        .options(joinedload(StockMovement.user))
         .filter_by(product_id=product_id)
         .order_by(StockMovement.created_at.desc())
         .all()

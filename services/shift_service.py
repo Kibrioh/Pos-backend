@@ -94,6 +94,9 @@ def record_cash_movement(shift_id, actor, direction, amount, note):
         raise ServiceError("A reason is required for a cash movement")
 
     shift = _get_shift_for_actor(shift_id, actor)
+    if direction == "out" and amount > expected_cash_for_shift(shift):
+        raise ServiceError("Cash out cannot exceed the cash currently available in the till.", 409)
+
     movement = CashMovement(
         shift_id=shift.id,
         user_id=actor.id,
