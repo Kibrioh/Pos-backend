@@ -3,6 +3,7 @@ from flask_jwt_extended import create_access_token
 from extensions import db
 from models import User
 from utils.auth import get_current_user, login_required, manager_required
+from utils.password_policy import password_policy_error
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
@@ -54,8 +55,9 @@ def register():
         errors["username"] = "At least 3 characters"
     if not name:
         errors["name"] = "Name is required"
-    if len(password) < 8:
-        errors["password"] = "At least 8 characters"
+    password_error = password_policy_error(password)
+    if password_error:
+        errors["password"] = password_error
     if role not in VALID_ROLES:
         errors["role"] = f"Must be one of {VALID_ROLES}"
     if errors:
@@ -83,9 +85,10 @@ def change_password():
     if not user.check_password(old_pw):
         return jsonify(status="error",
                        message="Current password is incorrect"), 401
-    if len(new_pw) < 8:
+    password_error = password_policy_error(new_pw)
+    if password_error:
         return jsonify(status="error",
-                       message="New password must be at least 8 characters"), 400
+                       message=password_error), 400
 
     user.set_password(new_pw)
     db.session.commit()

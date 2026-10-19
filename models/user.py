@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash, check_password_hash
 from extensions import db
+from utils.password_policy import password_policy_error
 
 class User(db.Model):
     __tablename__ = "users"
@@ -16,6 +17,9 @@ class User(db.Model):
     restocks = db.relationship("Restock", back_populates="user")
 
     def set_password(self, password):
+        error = password_policy_error(password)
+        if error:
+            raise ValueError(error)
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):

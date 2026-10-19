@@ -28,7 +28,13 @@ def make_sale():
         shift_id = shift.id
 
     try:
-        sale = create_sale(user.id, payload.get("items"), payment_method, shift_id)
+        sale = create_sale(
+            user.id,
+            payload.get("items"),
+            payment_method,
+            shift_id,
+            payload.get("amount_tendered"),
+        )
     except ServiceError as err:
         return jsonify(status="error", message=str(err)), err.status_code
 

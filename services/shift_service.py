@@ -49,6 +49,29 @@ def open_shift(user, opening_cash):
     return shift
 
 
+def assign_shift(manager, cashier_id, opening_cash):
+    """Assign an opening float to a cashier by opening their till shift."""
+    if not isinstance(cashier_id, int) or isinstance(cashier_id, bool) or cashier_id <= 0:
+        raise ServiceError("Select a valid cashier")
+
+    amount = parse_cash(opening_cash, "Opening float")
+    cashier = User.query.filter_by(id=cashier_id).with_for_update().first()
+    if cashier is None or cashier.role != "cashier":
+        raise ServiceError("Cashier not found", 404)
+    if get_current_shift(cashier.id):
+        raise ServiceError("This cashier already has an open shift", 409)
+
+    shift = CashierShift(user_id=cashier.id, opening_cash=amount, status="open")
+    db.session.add(shift)
+    db.session.flush()
+    add_audit_event(manager.id, "shift.float_assigned", "cashier_shift", shift.id, {
+        "cashier_id": cashier.id,
+        "opening_cash": str(amount),
+    })
+    db.session.commit()
+    return shift
+
+
 def _get_shift_for_actor(shift_id, actor, allow_manager=True):
     shift = CashierShift.query.filter_by(id=shift_id).with_for_update().first()
     if shift is None:

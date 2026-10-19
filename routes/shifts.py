@@ -1,7 +1,9 @@
 from flask import Blueprint, jsonify, request
 
+from extensions import db
 from services.shift_service import (
     close_shift,
+    assign_shift,
     get_current_shift,
     list_shifts,
     open_shift,
@@ -27,13 +29,30 @@ def all_shifts():
 
 
 @bp.post("/open")
-@login_required
+@manager_required
 def start_shift():
     user = get_current_user()
     payload = request.get_json(silent=True) or {}
     try:
         shift = open_shift(user, payload.get("opening_cash", 0))
     except ServiceError as error:
+        return jsonify(status="error", message=str(error)), error.status_code
+    return jsonify(shift.to_dict()), 201
+
+
+@bp.post("/assign")
+@manager_required
+def assign_cashier_float():
+    manager = get_current_user()
+    payload = request.get_json(silent=True) or {}
+    try:
+        shift = assign_shift(
+            manager,
+            payload.get("cashier_id"),
+            payload.get("opening_cash"),
+        )
+    except ServiceError as error:
+        db.session.rollback()
         return jsonify(status="error", message=str(error)), error.status_code
     return jsonify(shift.to_dict()), 201
 

@@ -135,8 +135,8 @@ Errors use the shape `{"status": "error", "message": "..."}`.
 |--------|------|--------|---------|
 | POST | `/login` | public | `{username, password}` returns `access_token` and `user` |
 | GET | `/me` | login | the current user |
-| POST | `/register` | manager | `{username (3+ chars), name, password (8+ chars), role}` |
-| POST | `/change-password` | login | `{old_password, new_password}` |
+| POST | `/register` | manager | `{username (3+ chars), name, password, role}`; password must be 8+ characters with uppercase, lowercase, and a special character |
+| POST | `/change-password` | login | `{old_password, new_password}`; new password must meet the same requirements |
 | GET | `/users` | manager | list all users (no password hashes) |
 
 ### Products and categories
@@ -168,7 +168,8 @@ Errors use the shape `{"status": "error", "message": "..."}`.
 | POST | `/api/purchase-orders/<id>/receive` | manager | receive all or selected quantities; updates stock, average cost, restocks, and ledger |
 | GET | `/api/shifts/current` | login | current user's open till shift |
 | GET | `/api/shifts` | manager | recent shifts and reconciliations |
-| POST | `/api/shifts/open` | login | open a till with an opening float |
+| POST | `/api/shifts/assign` | manager | assign `{cashier_id, opening_cash}` and open that cashier's till |
+| POST | `/api/shifts/open` | manager | open the manager's own till with an opening float |
 | POST | `/api/shifts/<id>/cash-movements` | login | record till cash in/out with a reason |
 | POST | `/api/shifts/<id>/close` | login | close a shift and calculate expected cash / variance |
 
@@ -188,6 +189,7 @@ Create a sale. The client sends only product ids and quantities, never prices:
 
     {
       "payment_method": "cash",
+      "amount_tendered": "40.00",
       "items": [
         {"product_id": 1, "quantity": 2},
         {"product_id": 3, "quantity": 1}
@@ -201,6 +203,8 @@ Response `201`:
       "user_id": 2,
       "payment_method": "cash",
       "total_amount": "31.00",
+      "amount_tendered": "40.00",
+      "change_given": "9.00",
       "created_at": "2026-10-15T22:16:00+03:00",
       "items": [
         {

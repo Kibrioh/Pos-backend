@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from extensions import db
 from models import Product, Sale, SaleItem, User
@@ -7,6 +7,7 @@ from services.audit_service import add_audit_event
 from services.stock_service import ServiceError, deduct_stock
 
 BASE_CURRENCY_QUANTUM = Decimal("0.0001")
+KSH_ROUNDING_TOLERANCE = Decimal("0.0039")
 
 
 def _clean_items(raw_items):
@@ -29,7 +30,28 @@ def _clean_items(raw_items):
     return wanted
 
 
-def create_sale(user_id, raw_items, payment_method="cash", shift_id=None):
+def _cash_tender_and_change(amount_tendered, total):
+    if amount_tendered is None:
+        return total, Decimal("0.0000")
+    try:
+        tendered = Decimal(str(amount_tendered))
+    except (InvalidOperation, TypeError, ValueError) as error:
+        raise ServiceError("Cash received must be a valid amount") from error
+    if not tendered.is_finite() or tendered < 0:
+        raise ServiceError("Cash received must be a non-negative amount")
+
+    tendered = tendered.quantize(BASE_CURRENCY_QUANTUM)
+    # The cashier enters whole KSh while stored prices are converted to the
+    # base currency. Treat a sub-half-shilling rounding difference as exact.
+    if tendered < total and (total - tendered) <= KSH_ROUNDING_TOLERANCE:
+        tendered = total
+    if tendered < total:
+        raise ServiceError("Cash received is less than the sale total")
+    return tendered, (tendered - total).quantize(BASE_CURRENCY_QUANTUM)
+
+
+def create_sale(user_id, raw_items, payment_method="cash", shift_id=None,
+                amount_tendered=None):
     wanted = _clean_items(raw_items)
 
     try:
@@ -64,16 +86,33 @@ def create_sale(user_id, raw_items, payment_method="cash", shift_id=None):
         if problems:
             raise ServiceError(" ".join(problems), 409)
 
-        sale = Sale(user_id=user.id, shift_id=shift_id, payment_method=payment_method)
+        total = sum(
+            (
+                (by_id[product_id].price * quantity).quantize(BASE_CURRENCY_QUANTUM)
+                for product_id, quantity in wanted.items()
+            ),
+            Decimal("0.0000"),
+        )
+        if payment_method == "cash":
+            tendered, change_given = _cash_tender_and_change(amount_tendered, total)
+        else:
+            tendered = None
+            change_given = Decimal("0.0000")
+
+        sale = Sale(
+            user_id=user.id,
+            shift_id=shift_id,
+            payment_method=payment_method,
+            amount_tendered=tendered,
+            change_given=change_given,
+        )
         db.session.add(sale)
         db.session.flush()  # gets sale.id without committing yet
 
-        total = Decimal("0.0000")
         for product_id, qty in wanted.items():
             product = by_id[product_id]
             unit_price = product.price  # always from the database, never the client
             subtotal = (unit_price * qty).quantize(BASE_CURRENCY_QUANTUM)
-            total += subtotal
 
             db.session.add(SaleItem(
                 sale_id=sale.id, product_id=product.id,
@@ -89,6 +128,8 @@ def create_sale(user_id, raw_items, payment_method="cash", shift_id=None):
         add_audit_event(user.id, "sale.completed", "sale", sale.id, {
             "total_amount": str(total),
             "payment_method": payment_method,
+            "amount_tendered": str(tendered) if tendered is not None else None,
+            "change_given": str(change_given),
             "item_count": len(wanted),
             "shift_id": shift_id,
         })
