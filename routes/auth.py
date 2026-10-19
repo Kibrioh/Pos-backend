@@ -97,5 +97,12 @@ def change_password():
 @auth_bp.get("/users")
 @manager_required
 def list_users():
-    users = User.query.order_by(User.created_at.desc()).all()
+    query = User.query
+    role = (request.args.get("role") or "").strip().lower()
+    if role:
+        if role not in VALID_ROLES:
+            return jsonify(status="error", message="Invalid user role filter"), 400
+        query = query.filter(db.func.lower(User.role) == role)
+
+    users = query.order_by(User.created_at.desc()).all()
     return jsonify(status="success", users=[u.to_dict() for u in users]), 200
