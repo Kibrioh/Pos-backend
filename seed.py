@@ -321,17 +321,14 @@ with app.app_context():
         }
         products = []
 
-        for product_number, (category_name, title, brand, low_price, high_price) in enumerate(all_specs, start=1):
+        for category_name, title, brand, low_price, high_price in all_specs:
             stock = special_stock.get(title, random.randint(0, 10))
             threshold = 5
-            price = Decimal(str(random.randint(low_price, high_price)))
 
             product = Product(
                 title=title,
                 brand=brand,
-                barcode=f"TP{product_number:08d}",
-                price=price,
-                unit_cost=(price * Decimal("0.65")).quantize(Decimal("0.01")),
+                price=Decimal(str(random.randint(low_price, high_price))),
                 stock_quantity=stock,
                 low_stock_threshold=threshold,
                 category=categories[category_name],
