@@ -31,6 +31,18 @@ def list_sales():
     return jsonify([sale.to_dict() for sale in sales])
 
 
+@bp.get("/mine")
+@login_required
+def my_sales():
+    user = get_current_user()
+    sales = (
+        Sale.query.filter_by(user_id=user.id)
+        .order_by(Sale.created_at.desc())
+        .all()
+    )
+    return jsonify([sale.to_dict() for sale in sales])
+
+
 @bp.get("/<int:sale_id>")
 @login_required
 def get_sale(sale_id):
