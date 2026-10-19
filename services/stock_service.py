@@ -191,7 +191,7 @@ def adjust_stock(payload, actor_id=None):
     _require_positive_int(product_id, "product_id")
     _require_positive_int(user_id, "user_id")
     if not isinstance(delta, int) or delta == 0:
-        raise ServiceError("delta must be a non-zero integer")
+        raise ServiceError("Stock quantity change must be a non-zero whole number")
 
     product = db.session.get(Product, product_id)
     if not product or not product.is_active:
@@ -221,7 +221,7 @@ def adjust_stock(payload, actor_id=None):
     )
     db.session.add(movement)
     add_audit_event(user.id, "stock.adjusted", "product", product.id, {
-        "delta": delta,
+        "quantity_change": delta,
         "stock_before": before,
         "stock_after": after,
         "note": note or None,

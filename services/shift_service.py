@@ -107,6 +107,7 @@ def record_cash_movement(shift_id, actor, direction, amount, note):
     db.session.add(movement)
     db.session.flush()
     add_audit_event(actor.id, f"shift.cash_{direction}", "cash_movement", movement.id, {
+        "cashier_id": shift.user_id,
         "shift_id": shift.id,
         "amount": str(amount),
         "note": note[:240],
