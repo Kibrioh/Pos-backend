@@ -231,7 +231,8 @@ def dashboard_summary():
     if error:
         return error
 
-    revenue, count = query.with_entities(
+    total_sales, revenue, count = query.with_entities(
+        func.coalesce(func.sum(Sale.total_amount), 0),
         func.coalesce(func.sum(net_revenue_expression()), 0),
         func.count(Sale.id),
     ).one()
@@ -246,6 +247,7 @@ def dashboard_summary():
 
     return jsonify(
         status="success",
+        total_sales=money(total_sales),
         total_revenue=money(revenue),
         transaction_count=int(count),
         product_count=Product.query.filter(Product.is_active.is_(True)).count(),
