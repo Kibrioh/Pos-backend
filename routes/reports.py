@@ -137,6 +137,34 @@ def sales_by_date():
     ]), 200
 
 
+@bp.get("/payment-methods")
+@manager_required
+def payment_methods():
+    query, error = filtered_sales_query()
+    if error:
+        return error
+
+    rows = query.with_entities(
+        Sale.payment_method.label("payment_method"),
+        func.sum(net_revenue_expression()).label("total_revenue"),
+        func.count(Sale.id).label("transaction_count"),
+    ).group_by(
+        Sale.payment_method
+    ).order_by(
+        func.sum(net_revenue_expression()).desc(),
+        Sale.payment_method.asc(),
+    ).all()
+
+    return jsonify(status="success", results=[
+        {
+            "payment_method": row.payment_method,
+            "total_revenue": money(row.total_revenue),
+            "transaction_count": int(row.transaction_count),
+        }
+        for row in rows
+    ]), 200
+
+
 @bp.get("/best-selling-products")
 @manager_required
 def best_selling_products():
