@@ -115,8 +115,12 @@ Check it: <http://127.0.0.1:5000/api/health> should return
 
 1. `POST /api/auth/login` with a username and password returns an
    `access_token`.
-2. Send it on every protected request: `Authorization: Bearer <token>`.
-3. Two roles exist: `manager` and `cashier`.
+2. On a new database, create the first manager with
+   `POST /api/auth/manager-signup`. This one-time setup endpoint is disabled
+   once a manager account exists; later cashiers are registered by signing in
+   as a manager and calling `POST /api/auth/register`.
+3. Send the token on every protected request: `Authorization: Bearer <token>`.
+4. Two roles exist: `manager` and `cashier`.
    - `login_required`: any logged-in user (manager or cashier)
    - `manager_required`: managers only
 
@@ -134,6 +138,8 @@ Errors use the shape `{"status": "error", "message": "..."}`.
 | Method | Path | Access | Purpose |
 |--------|------|--------|---------|
 | POST | `/login` | public | `{username, password}` returns `access_token` and `user` |
+| GET | `/manager-signup-available` | public | Returns whether first-manager setup is available |
+| POST | `/manager-signup` | public, first manager only | `{name, username (3+ chars), password}`; creates the first manager and returns an access token |
 | GET | `/me` | login | the current user |
 | POST | `/register` | manager | `{username (3+ chars), name, password, role}`; password must be 8+ characters with uppercase, lowercase, and a special character |
 | POST | `/change-password` | login | `{old_password, new_password}`; new password must meet the same requirements |
@@ -228,9 +234,14 @@ Response `201`:
 
 ### Reports: `/api/reports`
 
-`/dashboard`, `/summary`, `/gross-margin`, `/sales-by-date`, `/sales-by-cashier`,
-`/best-selling-products` (all GET). The role needed for each is defined in
-`routes/reports.py`.
+`/manager-dashboard`, `/dashboard`, `/summary`, `/gross-margin`, `/sales-by-date`,
+`/sales-by-cashier`, and `/best-selling-products` (all GET, manager access).
+The dashboard endpoint accepts `start_date` and `end_date` in `YYYY-MM-DD`
+format and returns current and previous-period sales, profit/cost coverage,
+product and category performance, cashier metrics, Nairobi-local sales timing,
+inventory valuation and days cover, open purchase orders, and till variance.
+Sales reporting date boundaries use the `Africa/Nairobi` business timezone.
+See `routes/reports.py` for response fields and calculations.
 
 `GET /api/audit` returns the latest audited product, stock, sale, return,
 purchase order, and till actions to managers. Gross margin is based on the

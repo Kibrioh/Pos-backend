@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token
+from sqlalchemy import text
 from extensions import db
 from models import User
 from utils.auth import get_current_user, login_required, manager_required
@@ -33,6 +34,70 @@ def login():
         additional_claims={"role": user.role},
     )
     return jsonify(status="success", access_token=token, user=user.to_dict()), 200
+
+
+@auth_bp.get("/manager-signup-available")
+def manager_signup_available():
+    has_manager = User.query.filter(
+        db.func.lower(User.role) == "manager"
+    ).first() is not None
+    return jsonify(status="success", available=not has_manager), 200
+
+
+@auth_bp.post("/manager-signup")
+def manager_signup():
+    data = request.get_json(silent=True) or {}
+    raw_username = data.get("username")
+    raw_name = data.get("name")
+    username = raw_username.strip() if isinstance(raw_username, str) else ""
+    name = raw_name.strip() if isinstance(raw_name, str) else ""
+    password = data.get("password") or ""
+
+    errors = {}
+    if len(username) < 3:
+        errors["username"] = "At least 3 characters"
+    elif len(username) > 80:
+        errors["username"] = "At most 80 characters"
+    if not name:
+        errors["name"] = "Name is required"
+    elif len(name) > 120:
+        errors["name"] = "At most 120 characters"
+    password_error = password_policy_error(password)
+    if password_error:
+        errors["password"] = password_error
+    if errors:
+        return jsonify(status="error", message="Validation failed",
+                       errors=errors), 400
+
+    # Serialize first-manager setup requests so only one can pass the check.
+    if db.session.get_bind().dialect.name == "postgresql":
+        db.session.execute(text("LOCK TABLE users IN EXCLUSIVE MODE"))
+
+    has_manager = User.query.filter(
+        db.func.lower(User.role) == "manager"
+    ).first() is not None
+    if has_manager:
+        return jsonify(
+            status="error",
+            message="Manager account setup is already complete",
+        ), 409
+
+    if User.query.filter(
+        db.func.lower(User.username) == username.lower()
+    ).first():
+        return jsonify(status="error", message="Username already exists"), 409
+
+    user = User(username=username, name=name, role="manager")
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+
+    token = create_access_token(
+        identity=str(user.id),
+        additional_claims={"role": user.role},
+    )
+    return jsonify(status="success", access_token=token,
+                   user=user.to_dict()), 201
 
 
 @auth_bp.get("/me")
