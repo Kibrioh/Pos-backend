@@ -115,10 +115,9 @@ Check it: <http://127.0.0.1:5000/api/health> should return
 
 1. `POST /api/auth/login` with a username and password returns an
    `access_token`.
-2. On a new database, create the first manager with
-   `POST /api/auth/manager-signup`. This one-time setup endpoint is disabled
-   once a manager account exists; later cashiers are registered by signing in
-   as a manager and calling `POST /api/auth/register`.
+2. Create a manager with `POST /api/auth/manager-signup`. Public sign-up
+   creates a manager account whenever the username is available. Managers can
+   also register cashiers by signing in and calling `POST /api/auth/register`.
 3. Send the token on every protected request: `Authorization: Bearer <token>`.
 4. Two roles exist: `manager` and `cashier`.
    - `login_required`: any logged-in user (manager or cashier)
@@ -138,8 +137,8 @@ Errors use the shape `{"status": "error", "message": "..."}`.
 | Method | Path | Access | Purpose |
 |--------|------|--------|---------|
 | POST | `/login` | public | `{username, password}` returns `access_token` and `user` |
-| GET | `/manager-signup-available` | public | Returns whether first-manager setup is available |
-| POST | `/manager-signup` | public, first manager only | `{name, username (3+ chars), password}`; creates the first manager and returns an access token |
+| GET | `/manager-signup-available` | public | Returns whether public manager sign-up is available |
+| POST | `/manager-signup` | public | `{name, username (3+ chars), password}`; creates a manager if the username is available and returns an access token |
 | GET | `/me` | login | the current user |
 | POST | `/register` | manager | `{username (3+ chars), name, password, role}`; password must be 8+ characters with uppercase, lowercase, and a special character |
 | POST | `/change-password` | login | `{old_password, new_password}`; new password must meet the same requirements |

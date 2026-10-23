@@ -38,10 +38,7 @@ def login():
 
 @auth_bp.get("/manager-signup-available")
 def manager_signup_available():
-    has_manager = User.query.filter(
-        db.func.lower(User.role) == "manager"
-    ).first() is not None
-    return jsonify(status="success", available=not has_manager), 200
+    return jsonify(status="success", available=True), 200
 
 
 @auth_bp.post("/manager-signup")
@@ -69,18 +66,9 @@ def manager_signup():
         return jsonify(status="error", message="Validation failed",
                        errors=errors), 400
 
-    # Serialize first-manager setup requests so only one can pass the check.
+    # Serialize public signups so the case-insensitive username check is race-safe.
     if db.session.get_bind().dialect.name == "postgresql":
         db.session.execute(text("LOCK TABLE users IN EXCLUSIVE MODE"))
-
-    has_manager = User.query.filter(
-        db.func.lower(User.role) == "manager"
-    ).first() is not None
-    if has_manager:
-        return jsonify(
-            status="error",
-            message="Manager account setup is already complete",
-        ), 409
 
     if User.query.filter(
         db.func.lower(User.username) == username.lower()
