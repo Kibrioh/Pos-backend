@@ -20,6 +20,7 @@ class SaleItem(db.Model):
     def to_dict(self):
         return {"id": self.id, "sale_id": self.sale_id, "product_id": self.product_id,
                 "product_title": self.product.title if self.product else None,
+                "category": self.product.category.name if self.product and self.product.category else None,
                 "quantity": self.quantity, "unit_price": str(self.unit_price),
                 "unit_cost": str(self.unit_cost) if self.unit_cost is not None else None,
                 "subtotal": str(self.subtotal)}
